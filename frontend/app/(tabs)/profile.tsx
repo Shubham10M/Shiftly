@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -29,7 +29,11 @@ export default function ProfileTab() {
     try {
       await logout();
     } catch {}
-    router.replace("/");
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.location.replace("/");
+    } else {
+      router.replace("/");
+    }
   };
 
   if (loading) {

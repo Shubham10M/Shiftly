@@ -1,0 +1,32 @@
+{
+  "summary": "Re-verified the logout fix in /app/frontend/app/(tabs)/profile.tsx (handleLogout now does `window.location.replace('/')` on web and `router.replace('/')` on native after `await logout()`). RESULT: PASS — bug is FIXED. Full flow tested: Phone OTP login with +919966666666 / 123456 -> /role-select (role-student + role-continue-btn) -> /profile-setup (form pre-populated from prior runs, hit save-profile-btn) -> /(tabs) Swipe -> tap Profile tab (URL became /profile) -> tap [data-testid=logout-btn]. Within 1000ms the document contained ONLY auth-screen testIDs ['brand-title','google-login-btn','phone-login-btn'] — no 'swipe-*', 'tab-*', 'logout-btn', 'edit-profile-btn', or 'profile-name' residue. URL = '/'. localStorage token cleared (null). No red screen, no pageerror. The hard reload via window.location.replace('/') successfully unmounts the (tabs) Tabs navigator on expo-router-web, which was the root cause from iteration_4. Deprecation warnings still present and unchanged: 'shadow*' style props (use boxShadow) and `props.pointerEvents` (use style.pointerEvents) — same as iteration_4, not a regression.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["RN-Web deprecation warnings still present (carried over from iteration_4): 'shadow*' style props -> use boxShadow; `props.pointerEvents` -> use style.pointerEvents. Cosmetic, no impact on functionality."]}
+    ],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Deprecated shadowColor/shadowOffset/shadowOpacity/shadowRadius on RN-Web. Migrate to boxShadow. Reference: warning logged on every screen mount."},
+      {"component": "props.pointerEvents", "issue": "Deprecated `pointerEvents` as a prop on a RN-Web View — use style.pointerEvents. Reference: warning emitted during /profile-setup mount."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_5.json"],
+  "action_items": [
+    "LOW: Logout fix is verified end-to-end. Optional follow-ups: (1) add testIDs to the bottom Tabs.Screen tabs (e.g. tabBarTestID='tab-profile-btn') so future Playwright runs don't have to fall back to coordinate clicks; (2) migrate `shadow*` props to `boxShadow` and `pointerEvents` prop to `style.pointerEvents` to silence the deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "(tabs)/profile.tsx:28-37 — handleLogout is correctly implemented: awaits logout() (cookies+token cleared, /api/auth/me returns 401), then on web does window.location.replace('/') to force a hard reload that tears down the (tabs) Tabs navigator (the iteration_4 RCA), and on native falls back to router.replace('/') which works correctly on real devices. The web-only branch is the right escape hatch for the expo-router-web limitation and does NOT affect native behavior."
+  ],
+  "updated_files": ["/app/test_reports/iteration_5.json"],
+  "success_rate": {
+    "backend": "not tested this iteration (frontend-only per request)",
+    "frontend": "Logout flow PASS 100%: phone-login-btn visible at t=1000ms after tapping logout-btn; (tabs)/swipe testIDs fully absent; URL='/'; token cleared; no errors."
+  },
+  "seed_data_creation": "Reused existing user +919966666666 (student profile already persisted from earlier test runs; profile-setup form pre-populated and saved without modification).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Logout bug from iterations 1-4 is RESOLVED in iteration_5. EXPO_PUBLIC_BACKEND_URL=https://shift-link-1.preview.emergentagent.com. For future logout regression: phone +919966666666 / OTP 123456 lands in role-select -> profile-setup (pre-filled, just hit save-profile-btn) -> (tabs). Bottom Profile tab has no testID; click via coordinates (~x=325, y=805 on 390x844 viewport) or by `text=Profile` last match — URL changes to /profile. Then tap [data-testid=logout-btn]. Expected: within ~1s, [data-testid=phone-login-btn] visible, no swipe-* or *-btn (tab) testIDs in DOM, URL='/', token cleared in localStorage. The fix relies on window.location.replace('/') on web — DO NOT remove that branch.",
+  "rca_of_issue": "Original bug RCA (iterations 1-4): expo-router-web does not unmount a child Tabs navigator group when a descendant screen calls router.replace('/'); URL updates but React tree still rendered (tabs)/_layout + (tabs)/index. FIX applied in iteration_5: in handleLogout, after `await logout()`, branch on Platform.OS — on web call `window.location.replace('/')` which triggers a full page reload, unmounting all React Native Web roots including the Tabs group, then the app re-hydrates at '/' as the unauthenticated index showing phone-login-btn. On native, the existing `router.replace('/')` continues to work. VERIFIED: post-logout DOM contains only auth-screen testIDs, token cleared, no errors."
+}
