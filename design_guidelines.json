@@ -1,0 +1,178 @@
+{
+  "app_name": "shiftpe",
+  "personality": "4 Tactile / Playful LIGHT",
+  "personality_one_liner": "A vibrant, approachable, and highly touchable matchmaking tool that feels like a friendly local handshake rather than a cold corporate job board.",
+  "color": {
+    "surface": "#FFFBF7",
+    "onSurface": "#1C1917",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#44403C",
+    "surfaceTertiary": "#F5EBE1",
+    "onSurfaceTertiary": "#44403C",
+    "surfaceInverse": "#292524",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#E04F26",
+    "brandPrimary": "#E04F26",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#F59E0B",
+    "onBrandSecondary": "#1C1917",
+    "brandTertiary": "#FFEDD5",
+    "onBrandTertiary": "#C2410C",
+    "success": "#16A34A",
+    "onSuccess": "#FFFFFF",
+    "warning": "#EAB308",
+    "onWarning": "#1C1917",
+    "error": "#DC2626",
+    "onError": "#FFFFFF",
+    "info": "#0EA5E9",
+    "onInfo": "#FFFFFF",
+    "border": "#E7E5E4",
+    "borderStrong": "#D6D3D1",
+    "divider": "#E7E5E4"
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Figtree",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous tactile padding. Use md/lg between text elements, xl between major sections. Cards must not touch screen edges.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "2",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": "true",
+    "do's": [
+      "Use on the sticky bottom tab bar to let swipe cards peek through.",
+      "Use on sticky primary CTA buttons floating over scrollable content.",
+      "Use on the action button bar (Pass / Like) floating inside the swipe card."
+    ],
+    "dont's": [
+      "Do not use on regular input fields, list rows, or standard cards."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Auth / Login",
+      "purpose": "Simple OTP or Google login with a warm, welcoming branded hero.",
+      "states": {
+        "loading": "Centered brand-colored spinner",
+        "empty": "N/A",
+        "error": "Standard error toast"
+      },
+      "layout": "Top 40% is a warm abstract background (or illustration) with Shiftpe logo. Bottom 60% contains a large welcome heading, a phone number input field (surfaceTertiary background, pill radius), and a large pill-shaped sticky CTA at the bottom. Safe area bottom applies."
+    },
+    {
+      "name": "Role Selection",
+      "purpose": "User selects whether they are a Student (seeking work) or Shop Owner (seeking help).",
+      "states": {
+        "loading": "N/A",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Two large, tactile square cards side-by-side or stacked vertically. Each card has an icon, a bold title, and a short description. Unselected state: surfaceSecondary with shadow 1. Selected state: brandTertiary background with brandPrimary borderStrong. Sticky primary CTA 'Continue' at bottom."
+    },
+    {
+      "name": "Profile Creation",
+      "purpose": "Hinge-style step-by-step or vertical scroll profile builder.",
+      "states": {
+        "loading": "N/A",
+        "empty": "N/A",
+        "error": "Validation text below inputs"
+      },
+      "layout": "Vertical scroll. Uses large, rounded input fields and textarea boxes. Implement 'pill' shaped chips for selecting skills/requirements. Include a prominent 'Add Photo' dashed-border box. The 'Save Profile' CTA must be sticky at the bottom inside a KeyboardAvoidingView with a glassmorphism backdrop."
+    },
+    {
+      "name": "Swipe Deck (Home)",
+      "purpose": "Tinder-style card stack where users view profiles and swipe left/right.",
+      "states": {
+        "loading": "Skeleton cards pulsing",
+        "empty": "Illustration + 'You caught up! Check back later for more matches.' + Refresh CTA",
+        "error": "Error text + Retry button"
+      },
+      "layout": "Full-screen experience (minus safe areas). The main content is a large interactive card (shadow 2, radius lg). Card structure: Top 50% is a full-bleed photo with a vertical gradient scrim (transparent to surfaceInverse at 80% opacity) at the bottom edge. Text (Name, Role, Pay) sits over the dark scrim. Bottom 50% of the card is surfaceSecondary containing scrollable detail chips (Skills, Schedule, Bio). Floating over the bottom of the screen (outside the card) are two large circular FABs: Pass (surfaceSecondary with dark icon) and Like (brandPrimary with white icon)."
+    },
+    {
+      "name": "It's a Match",
+      "purpose": "Celebration screen when a mutual right-swipe occurs.",
+      "states": {
+        "loading": "N/A",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Full-screen modal. Background is the warm orange gradient image with an aggressive blur, or a solid brandPrimary background. Two large circular avatars overlap in the center. Large display text 'It's a Match!'. Two pill buttons below: 'Send a Message' (surfaceInverse) and 'Keep Swiping' (transparent with outline)."
+    },
+    {
+      "name": "Matches & Chat",
+      "purpose": "List of active connections and ongoing conversations.",
+      "states": {
+        "loading": "List skeleton",
+        "empty": "Illustration + 'No matches yet. Start swiping!'",
+        "error": "Error text + Retry button"
+      },
+      "layout": "Top section: Horizontal scroll view of 'New Matches' (circular avatars with names, unread dot). Divider. Bottom section: Vertical list of active chats. Each row is a minimum 56pt tall, containing avatar, name, last message preview, and timestamp. Touch targets must be generous."
+    }
+  ],
+  "haptics": {
+    "swipe_left": "impactMedium",
+    "swipe_right": "impactHeavy",
+    "match_celebration": "notificationSuccess",
+    "button_press": "impactLight",
+    "role_select": "selection"
+  },
+  "images": {
+    "student_sample": {
+      "url": "https://images.unsplash.com/photo-1667655861998-46fe4c29a4cf?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2ODl8MHwxfHNlYXJjaHwxfHxpbmRpYW4lMjBzdHVkZW50JTIwY2FzdWFsJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzgyNjcwMDQxfDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Indian student casual portrait"
+    },
+    "shop_owner_sample": {
+      "url": "https://images.unsplash.com/photo-1599978395458-d4ce49ea5e56?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzV8MHwxfHNlYXJjaHwxfHxpbmRpYW4lMjBzbWFsbCUyMHNob3AlMjBvd25lciUyMHBvcnRyYWl0fGVufDB8fHx8MTc4MjY3MDA0MXww&ixlib=rb-4.1.0&q=85",
+      "alt": "Indian small shop owner portrait"
+    },
+    "warm_gradient_bg": {
+      "url": "https://images.unsplash.com/photo-1617957718614-8c23f060c2d0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODl8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMHdhcm0lMjBvcmFuZ2UlMjB5ZWxsb3clMjBncmFkaWVudCUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzgyNjcwMDQ3fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Abstract warm orange yellow gradient background"
+    }
+  },
+  "instructions_to_main_agent": [
+    "STRICT: No purple, violet, indigo, or blue anywhere in the app. Use the defined Terracotta/Marigold brand palette to feel warm, localized, and distinctly Indian.",
+    "STRICT: Ensure font weights never exceed 500. Use typography sizes to establish hierarchy.",
+    "SWIPE DECK: Implement swipeable cards using React Native Reanimated and Gesture Handler. Apply 'impactMedium' haptic on left swipe, 'impactHeavy' on right swipe.",
+    "CARDS: The swipe card must feature an edge-to-edge photo at the top half with a vertical gradient scrim (transparent to surfaceInverse) at the bottom of the image to guarantee text readability.",
+    "LAYOUT: Use sticky primary CTA buttons hovering over scrollable content. Give them a glassmorphism or solid surface background to separate them from scrolling elements.",
+    "Do not use generic avatars; use the provided Indian student and shop owner Unsplash URLs to make the UI mockups look realistic and tailored to the problem statement.",
+    "Ensure touch targets are at least 44x44pt, specifically for the Pass/Like FABs and all list rows."
+  ]
+}
