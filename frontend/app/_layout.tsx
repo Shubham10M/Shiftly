@@ -1,7 +1,7 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { LogBox, View, ActivityIndicator } from "react-native";
+import { LogBox, View, ActivityIndicator, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -19,6 +19,12 @@ function Gate() {
 
   useEffect(() => {
     if (loading) return;
+    // Coordinate with Expo Router: if web URL still has a session_id hash, replace it.
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      if (window.location.hash.includes("session_id=") || window.location.search.includes("session_id=")) {
+        router.replace("/");
+      }
+    }
     const seg = segments[0];
     const inAuth = seg === undefined || seg === "index";
     if (!user) {
