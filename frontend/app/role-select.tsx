@@ -31,7 +31,7 @@ export default function RoleSelectScreen() {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.topBar}>
-        <Text style={styles.brand}>ShiftPe</Text>
+        <Text style={styles.brand}>Shiftly</Text>
         <Pressable testID="role-logout-btn" onPress={handleLogout} style={styles.logoutLink}>
           <Ionicons name="log-out-outline" size={16} color={COLORS.muted} />
           <Text style={styles.logoutLinkText}>Log out</Text>
@@ -39,7 +39,7 @@ export default function RoleSelectScreen() {
       </View>
       <View style={styles.header}>
         <Text style={styles.title}>I am a...</Text>
-        <Text style={styles.sub}>Choose how you want to use ShiftPe.</Text>
+        <Text style={styles.sub}>Choose how you want to use Shiftly.</Text>
       </View>
 
       <View style={styles.cards}>

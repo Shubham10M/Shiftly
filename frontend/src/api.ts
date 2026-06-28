@@ -2,7 +2,7 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
-const TOKEN_KEY = "shiftpe_token";
+const TOKEN_KEY = "shiftly_token";
 
 export async function saveToken(token: string) {
   if (Platform.OS === "web") {

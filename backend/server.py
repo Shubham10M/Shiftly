@@ -1,4 +1,4 @@
-"""ShiftPe backend - matching students with shop owners."""
+"""Shiftly backend - matching students with shop owners."""
 from fastapi import FastAPI, APIRouter, HTTPException, Header, Request, WebSocket, WebSocketDisconnect
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -28,7 +28,7 @@ app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("shiftpe")
+logger = logging.getLogger("shiftly")
 
 # ---------------- Utility ----------------
 def now_utc() -> datetime:
@@ -437,10 +437,10 @@ async def ai_bio_suggestion(payload: BioSuggestIn, authorization: Optional[str] 
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         if payload.role == "student":
-            sys_msg = "You write short, warm, authentic bios for a gig-work app called ShiftPe. Bios are for Indian students looking for part-time work. Keep it under 2 sentences, friendly, no emojis, no hashtags."
+            sys_msg = "You write short, warm, authentic bios for a gig-work app called Shiftly. Bios are for Indian students looking for part-time work. Keep it under 2 sentences, friendly, no emojis, no hashtags."
             prompt = f"Write a bio for {payload.name or 'a student'}. Skills: {', '.join(payload.skills or []) or 'general'}. Qualification: {payload.qualification or 'student'}. Make it sound real and approachable."
         else:
-            sys_msg = "You write short, warm, authentic bios for a gig-work app called ShiftPe. Bios are for small shop owners in India who need part-time help. Keep it under 2 sentences, friendly, no emojis, no hashtags."
+            sys_msg = "You write short, warm, authentic bios for a gig-work app called Shiftly. Bios are for small shop owners in India who need part-time help. Keep it under 2 sentences, friendly, no emojis, no hashtags."
             prompt = f"Write a bio for a shop owner. Help needed: {payload.help_needed or 'shop assistance'}. Make it inviting to students."
 
         chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=make_id("ai"), system_message=sys_msg).with_model("anthropic", "claude-sonnet-4-6")
@@ -557,7 +557,7 @@ async def seed_data():
 # ---------------- Misc ----------------
 @api_router.get("/")
 async def root():
-    return {"app": "ShiftPe", "status": "ok"}
+    return {"app": "Shiftly", "status": "ok"}
 
 app.include_router(api_router)
 

@@ -160,7 +160,7 @@ export default function SwipeDeckScreen() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.brand}>ShiftPe</Text>
+        <Text style={styles.brand}>Shiftly</Text>
         <Text style={styles.subhead}>{user?.role === "student" ? "Shops looking for you" : "Students ready to work"}</Text>
       </View>
 

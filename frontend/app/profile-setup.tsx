@@ -147,7 +147,7 @@ export default function ProfileSetupScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.topBar}>
-            <Text style={styles.brand}>ShiftPe</Text>
+            <Text style={styles.brand}>Shiftly</Text>
             <Pressable
               testID="setup-logout-btn"
               onPress={async () => { await logout(); router.replace("/"); }}

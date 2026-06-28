@@ -122,7 +122,7 @@ export default function AuthScreen() {
           style={StyleSheet.absoluteFill}
         />
         <SafeAreaView edges={["top"]} style={styles.heroSafe}>
-          <Text style={styles.brand} testID="brand-title">ShiftPe</Text>
+          <Text style={styles.brand} testID="brand-title">Shiftly</Text>
           <Text style={styles.tagline}>Find your perfect shift, one swipe away.</Text>
         </SafeAreaView>
       </View>
