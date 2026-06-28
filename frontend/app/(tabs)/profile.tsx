@@ -25,6 +25,13 @@ export default function ProfileTab() {
 
   useEffect(() => { load(); }, [load]);
 
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {}
+    // Gate will detect user===null and redirect to '/'
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.root}>
@@ -40,7 +47,13 @@ export default function ProfileTab() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView contentContainerStyle={{ padding: SP.xl, paddingBottom: SP.xxxl }}>
         <View style={styles.head}>
-          <Image source={{ uri: photo || undefined }} style={styles.avatar} contentFit="cover" />
+          {photo ? (
+            <Image source={{ uri: photo }} style={styles.avatar} contentFit="cover" />
+          ) : (
+            <View style={[styles.avatar, { alignItems: "center", justifyContent: "center" }]}>
+              <Ionicons name="person" size={56} color={COLORS.brandPrimary} />
+            </View>
+          )}
           <Text style={styles.name} testID="profile-name">{profile?.name}</Text>
           <Text style={styles.role}>{isShop ? (profile?.shop_name || "Shop Owner") : "Student"}</Text>
           {profile?.city ? <Text style={styles.city}>{profile.city}</Text> : null}
@@ -87,7 +100,7 @@ export default function ProfileTab() {
           <Text style={styles.editBtnText}>Edit profile</Text>
         </Pressable>
 
-        <Pressable testID="logout-btn" onPress={() => { logout(); router.replace("/"); }} style={styles.logoutBtn}>
+        <Pressable testID="logout-btn" onPress={handleLogout} style={styles.logoutBtn}>
           <Ionicons name="log-out-outline" size={18} color={COLORS.error} />
           <Text style={styles.logoutText}>Log out</Text>
         </Pressable>

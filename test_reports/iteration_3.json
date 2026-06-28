@@ -1,0 +1,48 @@
+{
+  "summary": "Verified the (tabs)/profile.tsx logout fix attempt on web preview (mobile 390x844). RESULT: PARTIAL — logout-btn tap on Profile tab now succeeds at the API/state level (POST /api/auth/logout -> 200, localStorage shiftpe_token cleared, GET /api/auth/me without token -> 401, no JS pageerror / red-screen / app crash) BUT the UI does NOT visually return to the auth screen. After tapping logout-btn the URL changes to '/' (Gate's router.replace('/') fires correctly because user is null) yet the (tabs) layout / Swipe screen REMAINS RENDERED for >8s of polling and the auth index screen (phone-login-btn) NEVER appears. The user is visually stuck inside the bottom-tab UI even though auth state has been cleared. The original 'crash on logout' is fixed (no crash, no white-screen, no pageerror) but the acceptance criterion 'user is returned to the login (auth) screen' FAILS. Re-login regression after this state could not be exercised because the auth screen is not reachable from the stuck tabs view (refreshing the browser DOES land on the login screen and re-login works fine — separate verification). REGRESSION CHECKS PASSED: role-logout-btn and setup-logout-btn flows still work (iteration_2 already verified). Phone OTP full flow (+919944444444 / 123456 -> /role-select -> /profile-setup -> /(tabs)) works end-to-end. Profile tab also no longer crashes for users without an uploaded photo (the conditional `photo ? <Image> : <Ionicons person>` is defensive), though note: in practice backend ALWAYS assigns a default Unsplash photo_url in /api/profile when the user does not upload one, so the Ionicons-person fallback branch is currently unreachable from the normal UI flow — confirmed by inspecting /api/profile/me which returned photo_url=https://images.unsplash.com/...4cf?w=600 for the just-created profile that never uploaded a photo. Deprecated style props detected: 'shadow*' (use boxShadow), 'props.pointerEvents' (use style.pointerEvents).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "(tabs)/profile.tsx -> handleLogout", "issue": "After tapping logout-btn from inside the Tabs stack, auth state + token + backend session are correctly cleared and Gate's router.replace('/') fires (URL becomes '/'), but the (tabs)/index Swipe screen REMAINS visually mounted; the auth index screen does NOT render. User is left on the Swipe view with the bottom tab bar still active even though they are logged out. Polling for [data-testid=\"phone-login-btn\"] for 8s never resolves. Confirmed no crash / pageerror — purely a navigation-unmount issue specific to expo-router on web when leaving a nested (tabs) group via Gate-driven replace. Reference: /app/frontend/app/(tabs)/profile.tsx:28-33 and /app/frontend/app/_layout.tsx:30-33. Suggested fix: re-add an EXPLICIT router.replace('/') (and ideally router.dismissAll() if available) inside handleLogout AFTER await logout() — matches the pattern that works in role-select.tsx (line 26-29) and profile-setup.tsx. Removing it for the (tabs) screen because of a 'race condition' (per iteration_2 RCA) appears to break the only path that actually triggers unmount of the nested Tabs navigator on web.", "testID": "logout-btn", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Logout from Profile tab", "issue": "Functional integration works (logout API 200, token cleared, /auth/me 401) but UI does not navigate; the success of integration is invisible to the user.", "affected_testIDs": ["logout-btn", "phone-login-btn"]}
+    ],
+    "design_issues": [
+      {"screen": "global", "issues": ["RN-Web deprecation warnings still present: 'shadow*' style props -> use boxShadow; 'props.pointerEvents' -> use style.pointerEvents."]}
+    ],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Deprecated shadowColor/shadowOffset/shadowOpacity/shadowRadius on RN-Web -> migrate to boxShadow. Reference: warnings emitted on app load."},
+      {"component": "props.pointerEvents", "issue": "Deprecated `pointerEvents` as a prop on a RN-Web View -> use style.pointerEvents. Reference: warning emitted during /profile-setup mount."}
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_3.json",
+    "/app/backend/tests/test_shiftpe_api.py (existing, not re-run per request — frontend only)"
+  ],
+  "action_items": [
+    "HIGH: In /app/frontend/app/(tabs)/profile.tsx handleLogout, add an explicit `router.replace('/')` after `await logout()`. Mirror the working pattern from /app/frontend/app/role-select.tsx (lines 26-29). Relying on Gate alone is insufficient on web for the nested (tabs) navigator — Gate updates the URL but the Tabs layout does not unmount, leaving the user stuck on the Swipe screen.",
+    "OPTIONAL: After fixing, also call router.dismissAll() if expo-router exposes it, to ensure the (tabs) navigator is fully torn down on native.",
+    "OPTIONAL: Migrate `shadow*` props to `boxShadow` and `pointerEvents` prop to `style.pointerEvents` to silence RN-Web deprecation warnings.",
+    "NOTE: Backend /api/profile creation always populates a fallback photo_url (server.py:223-228). The defensive `<Image> vs <Ionicons person>` conditional in profile.tsx is therefore unreachable through the normal user flow. Either remove the unused fallback or stop assigning a default photo_url server-side if the design wants a true placeholder for photoless users."
+  ],
+  "critical_code_review_comments": [
+    "profile.tsx:50-56 — conditional photo render is well written (no crash risk on undefined uri).",
+    "profile.tsx:28-33 — handleLogout awaits logout() but does NOT navigate. Comment claims 'Gate will detect user===null and redirect to /' — this is true for URL but NOT for screen unmounting inside the nested (tabs) Stack/Tabs layout on web.",
+    "_layout.tsx Gate (line 30-33) — `router.replace('/')` correctly fires when user becomes null and seg !== undefined/index; URL changes; but the visible screen does not switch from (tabs) to the auth index. Likely an expo-router-on-web behavior where a child Tabs group does not unmount on parent-stack replace.",
+    "auth.tsx logout() — fine: API POST, clearToken, setUser(null).",
+    "Backend assigns default photo_url, so the photoless-profile crash scenario can no longer be triggered via UI."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_3.json (new)"
+  ],
+  "success_rate": {
+    "backend": "not re-tested this iteration (frontend-only per request); iteration_2 backend pytest = 16/16 PASS",
+    "frontend": "Profile-tab no-crash: PASS. Logout API + state-clear: PASS. Logout UI navigation back to auth screen: FAIL (high-priority). Regression role/setup logout: PASS. Phone OTP flow: PASS."
+  },
+  "seed_data_creation": "Created new user via phone +919944444444 (OTP 123456) with profile name 'Test NoPhoto' (student, Bengaluru). Photo NOT uploaded by user; backend auto-assigned Unsplash fallback photo_url.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "EXPO_PUBLIC_BACKEND_URL=https://shift-link-1.preview.emergentagent.com (frontend/.env). Note review_request mentioned a different preview host (4f013fd1-...emergentagent.com) — the frontend actually uses shift-link-1.preview from .env, so test against that. To reproduce the logout UI bug: login with +919944444444 / 123456 (now an existing user with profile) -> lands in /(tabs) -> tap 'Profile' tab -> tap [data-testid=logout-btn] -> observe URL changes to '/' but Swipe screen / bottom tab bar still rendered, no auth screen shown. After fix, retest by polling for [data-testid=phone-login-btn] within 3s of logout tap.",
+  "rca_of_issue": "RCA — Logout from (tabs)/profile leaves user visually inside Tabs: handleLogout calls `await logout()` only; logout() clears the token and setUser(null). Root layout Gate has a useEffect that on user===null and segments[0]==='(tabs)' calls `router.replace('/')`. Verified via DevTools: window.location.pathname becomes '/'. However the screen tree is not re-rendered to the auth index — the (tabs)/_layout (a Tabs navigator) stays mounted and continues to show (tabs)/index. This is the same class of issue noted in iteration_2 with the Google session_id hash being re-synced by expo-router. The working pattern in role-select.tsx and profile-setup.tsx is to call `router.replace('/')` LOCALLY (from within the screen that owns the navigation context) right after `await logout()`. The iteration_2/3 'race condition' justification for removing that call from profile.tsx is incorrect; without it, expo-router-web does not unmount the nested Tabs group. MITIGATION: Restore `router.replace('/')` after `await logout()` in (tabs)/profile.tsx (and add try/catch around logout). Optionally guard against double navigation by checking `if (segments[0] === '(tabs)') router.replace('/')`. After fix, the test in this report should pass [data-testid=phone-login-btn] visibility within ~1s of logout tap."
+}
