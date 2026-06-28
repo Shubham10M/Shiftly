@@ -1,5 +1,32 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { Platform } from "react-native";
 import { api, getToken, saveToken, clearToken } from "../api";
+
+function readSessionIdFromUrl(): string | null {
+  if (Platform.OS !== "web" || typeof window === "undefined") return null;
+  try {
+    const hash = window.location.hash || "";
+    if (hash.includes("session_id=")) {
+      const params = new URLSearchParams(hash.replace(/^#/, ""));
+      const sid = params.get("session_id");
+      if (sid) return sid;
+    }
+    const search = window.location.search || "";
+    if (search.includes("session_id=")) {
+      const params = new URLSearchParams(search.replace(/^\?/, ""));
+      const sid = params.get("session_id");
+      if (sid) return sid;
+    }
+  } catch {}
+  return null;
+}
+
+function cleanUrl() {
+  if (Platform.OS !== "web" || typeof window === "undefined") return;
+  try {
+    window.history.replaceState(null, "", window.location.pathname);
+  } catch {}
+}
 
 type User = {
   user_id: string;
@@ -32,6 +59,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
+    // Web Google OAuth: detect session_id in URL hash/query and process it FIRST.
+    const sid = readSessionIdFromUrl();
+    if (sid) {
+      try {
+        const data = await api("/auth/google/session", {
+          method: "POST",
+          body: JSON.stringify({ session_id: sid }),
+        });
+        await saveToken(data.token);
+        cleanUrl();
+        setUser(data.user);
+        setLoading(false);
+        return;
+      } catch {
+        cleanUrl();
+        // fall through to existing-token check
+      }
+    }
     const tok = await getToken();
     if (!tok) {
       setUser(null);

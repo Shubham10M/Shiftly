@@ -4,13 +4,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-import { api } from "../src/api";
 import { useAuth } from "../src/context/auth";
 import { COLORS, SP, R } from "../src/theme";
 
 export default function RoleSelectScreen() {
   const router = useRouter();
-  const { refresh } = useAuth();
+  const { logout } = useAuth();
   const [role, setRole] = useState<"student" | "shop_owner" | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -18,15 +17,26 @@ export default function RoleSelectScreen() {
     if (!role) return;
     setLoading(true);
     try {
-      // Save role intent by routing to profile setup with role pre-selected
       router.replace({ pathname: "/profile-setup", params: { role } });
     } finally {
       setLoading(false);
     }
   };
 
+  const handleLogout = async () => {
+    await logout();
+    router.replace("/");
+  };
+
   return (
     <SafeAreaView style={styles.root}>
+      <View style={styles.topBar}>
+        <Text style={styles.brand}>ShiftPe</Text>
+        <Pressable testID="role-logout-btn" onPress={handleLogout} style={styles.logoutLink}>
+          <Ionicons name="log-out-outline" size={16} color={COLORS.muted} />
+          <Text style={styles.logoutLinkText}>Log out</Text>
+        </Pressable>
+      </View>
       <View style={styles.header}>
         <Text style={styles.title}>I am a...</Text>
         <Text style={styles.sub}>Choose how you want to use ShiftPe.</Text>
@@ -102,7 +112,11 @@ function RoleCard({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.surface, paddingHorizontal: SP.xl },
-  header: { marginTop: SP.xl, marginBottom: SP.xl },
+  topBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: SP.sm },
+  brand: { fontSize: 22, fontWeight: "500", color: COLORS.brandPrimary, letterSpacing: -0.5 },
+  logoutLink: { flexDirection: "row", alignItems: "center", gap: 4, padding: SP.xs },
+  logoutLinkText: { color: COLORS.muted, fontSize: 13, fontWeight: "500" },
+  header: { marginTop: SP.lg, marginBottom: SP.xl },
   title: { fontSize: 32, fontWeight: "500", color: COLORS.onSurface },
   sub: { fontSize: 15, color: COLORS.onSurfaceSecondary, marginTop: SP.xs },
   cards: { flex: 1, gap: SP.lg, paddingTop: SP.md },

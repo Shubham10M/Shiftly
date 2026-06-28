@@ -26,7 +26,7 @@ const GENDER_OPTIONS = ["any", "male", "female"];
 
 export default function ProfileSetupScreen() {
   const router = useRouter();
-  const { refresh, user } = useAuth();
+  const { refresh, user, logout } = useAuth();
   const params = useLocalSearchParams<{ role?: string }>();
   const role = (params.role as "student" | "shop_owner") || user?.role || "student";
 
@@ -146,6 +146,17 @@ export default function ProfileSetupScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.topBar}>
+            <Text style={styles.brand}>ShiftPe</Text>
+            <Pressable
+              testID="setup-logout-btn"
+              onPress={async () => { await logout(); router.replace("/"); }}
+              style={styles.logoutLink}
+            >
+              <Ionicons name="log-out-outline" size={16} color={COLORS.muted} />
+              <Text style={styles.logoutLinkText}>Log out</Text>
+            </Pressable>
+          </View>
           <Text style={styles.title}>{role === "student" ? "Your student profile" : "Your shop profile"}</Text>
           <Text style={styles.sub}>This is what others will see when matching.</Text>
 
@@ -445,6 +456,10 @@ function ChipRow({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.surface },
   scroll: { padding: SP.xl, paddingBottom: SP.xxxl },
+  topBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: SP.md },
+  brand: { fontSize: 22, fontWeight: "500", color: COLORS.brandPrimary, letterSpacing: -0.5 },
+  logoutLink: { flexDirection: "row", alignItems: "center", gap: 4, padding: SP.xs },
+  logoutLinkText: { color: COLORS.muted, fontSize: 13, fontWeight: "500" },
   title: { fontSize: 26, fontWeight: "500", color: COLORS.onSurface },
   sub: { fontSize: 14, color: COLORS.onSurfaceSecondary, marginTop: SP.xs, marginBottom: SP.lg },
   photoBox: {

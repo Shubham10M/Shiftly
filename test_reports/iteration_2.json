@@ -1,0 +1,45 @@
+{
+  "summary": "ShiftPe bug-fix verification iteration. BACKEND: 16/16 pytest still PASS (no regressions). Verified directly via curl: POST /api/auth/google/session with invalid session_id -> 401 'Invalid Google session' (correct). POST /api/auth/logout with token -> 200 and subsequent /api/auth/me -> 401 (session invalidated). FRONTEND (mobile 390x844): BUG #2 (logout from onboarding) FULLY VERIFIED — role-logout-btn visible on /role-select and tap returns user to login; setup-logout-btn visible on /profile-setup and tap returns user to login. Phone-OTP regression flow (phone-login-btn -> phone-input -> send-otp-btn -> otp-input -> verify-otp-btn -> /role-select -> role-continue-btn -> /profile-setup) works end-to-end relying on Gate's auth-state-change routing (the removed redundant router.replace('/') had no negative effect). BUG #1 (Google OAuth web callback): code path EXISTS and EXECUTES correctly — readSessionIdFromUrl() reads the session_id from window.location.hash, POST /api/auth/google/session is fired (verified via 401 response and network log), and cleanUrl() (window.history.replaceState(null,'',pathname)) IS invoked and DOES temporarily clear the hash. However Expo Router immediately RE-WRITES the hash back into the URL right after our cleanUrl call (verified by instrumenting window.history.replaceState — see RCA). The visible URL still contains '#session_id=...' after the failed-session path. This is a COSMETIC residue and does NOT block the success path because on a valid session_id the token is saved and Gate routes the user to /role-select or /(tabs) (subsequent expo-router navigations normalize the URL). Login screen still rendered and not crashed when invalid session_id is supplied — primary fix goal met.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AuthProvider.cleanUrl (web)", "issue": "window.history.replaceState successfully clears the hash, but Expo Router re-syncs and restores the original '#session_id=...' hash immediately after. Visible URL fragment is therefore not actually cleaned on web for failed/invalid session_id case. Reference: /app/frontend/src/context/auth.tsx:24-29. Does not affect success path (token saved, Gate redirects), but contradicts the explicit acceptance criterion 'URL fragment must be cleaned via window.history.replaceState'. Suggested fix: also call useRouter().replace('/') from a tiny ClientOnly child that subscribes to a flag set by AuthProvider, or replace cleanUrl with `requestAnimationFrame(() => window.history.replaceState(null,'',window.location.pathname))` plus a second call after a microtask, or expose a 'cleanUrlPending' flag and let Gate call router.replace('/') once auth resolves.", "testID": "n/a", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["RN-Web deprecation: 'shadow*' style props deprecated -> use boxShadow (still present from previous iteration, not addressed)."]}
+    ],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Deprecated shadowColor/shadowOffset/shadowOpacity/shadowRadius on Web (RN-Web warning). Migrate to boxShadow. Affected files include /app/frontend/app/(tabs)/index.tsx and /app/frontend/app/role-select.tsx."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_shiftpe_api.py",
+    "/app/test_reports/pytest/shiftpe_results.xml",
+    "/app/test_reports/iteration_2.json"
+  ],
+  "action_items": [
+    "Optional (LOW): Make the URL-fragment cleanup survive Expo Router's re-sync. Option A: in AuthProvider expose a `consumedSessionId` flag; in Gate (which has useRouter) call router.replace('/') once after auth state resolves on web when that flag is set. Option B: schedule cleanUrl() with requestAnimationFrame plus a setTimeout(0) follow-up. The functional success path (valid session_id) is already unaffected since Gate's redirect (router.replace('/role-select' or '/(tabs)')) will normalize the URL.",
+    "Optional: Migrate deprecated 'shadow*' style props to boxShadow for cleaner RN-Web compatibility."
+  ],
+  "critical_code_review_comments": [
+    "auth.tsx: refresh() correctly orders the session_id-from-URL check BEFORE the existing-token check. Both success and failure paths invoke cleanUrl(). Try/catch correctly swallows network errors.",
+    "role-select.tsx & profile-setup.tsx: handleLogout/logout calls api('/auth/logout', POST), clearToken, setUser(null), then router.replace('/'). Backend confirms the session is invalidated server-side.",
+    "index.tsx: redundant post-setToken router.replace('/') was removed; Gate handles routing on user state change — verified working in regression run.",
+    "All interactive elements have testID; styles via StyleSheet.create; text wrapped in <Text>; no HTML tags.",
+    "Backend: /api/auth/google/session returns 401 with clean JSON {'detail':'Invalid Google session'} for bad session_ids; /api/auth/logout idempotent and returns 200 {'ok':true} even without token."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_2.json (new)",
+    "/app/test_reports/pytest/shiftpe_results.xml (regenerated)"
+  ],
+  "success_rate": {"backend": "100% (16/16 pytest + 3/3 ad-hoc curl checks)", "frontend": "BUG #2 100% (role-logout-btn + setup-logout-btn both verified). BUG #1 ~80% — code path verified executing but Expo Router re-syncs the URL hash so the visible URL is not actually cleaned post-failure (cosmetic, does not break success path). Regression phone-OTP flow 100%."},
+  "seed_data_creation": "No new seed data; relied on prior auto-seeded profiles + transient test phones (+9197/+9196/+9198 with epoch suffixes).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "EXPO_PUBLIC_BACKEND_URL=https://shift-link-1.preview.emergentagent.com. Phone OTP magic code 123456. Run backend tests with: pytest /app/backend/tests/test_shiftpe_api.py -v. Expo Router on web restores URL hash after window.history.replaceState — if main agent attempts to actually scrub the visible URL, they should coordinate cleanup with expo-router's useRouter().replace, e.g. from inside Gate once auth resolves. The success path of Google OAuth is unaffected by this residue since Gate redirects post-login.",
+  "rca_of_issue": "BUG #1 cosmetic residue RCA — Instrumented window.history.replaceState in browser to observe call ordering: (1) On mount, Expo Router calls replaceState with url='/#session_id=...' (preserves hash as its routing state). (2) AuthProvider.refresh() POSTs /auth/google/session, receives 401. (3) catch{} calls cleanUrl() which invokes replaceState(null,'','/') — hash IS cleared (logged hashAfter:''). (4) Immediately after, Expo Router calls replaceState again with url='/#session_id=...' — re-injecting the hash from its internal location state. Conclusion: replaceState alone is insufficient on Expo Router web; need to coordinate with expo-router (e.g. router.replace) or defer cleanup until router is idle. Reproduction: navigate to '<frontend>/#session_id=ANY_INVALID' and observe window.location.hash after 4s — still contains '#session_id=ANY_INVALID'. Mitigation as listed in action_items."
+}

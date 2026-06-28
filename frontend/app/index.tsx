@@ -101,7 +101,7 @@ export default function AuthScreen() {
         body: JSON.stringify({ phone: phone.trim(), code: otp.trim() }),
       });
       await setToken(data.token, data.user);
-      router.replace("/");
+      // Gate effect will route the user to /role-select or /(tabs) as appropriate
     } catch (e: any) {
       setError(e?.message || "Invalid OTP");
     } finally {
