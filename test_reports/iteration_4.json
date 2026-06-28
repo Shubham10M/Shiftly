@@ -1,0 +1,40 @@
+{
+  "summary": "Re-verified logout fix on (tabs)/profile.tsx after restoring router.replace('/') call AFTER await logout(). RESULT: BUG STILL PRESENT. The restored fix does NOT resolve the issue. Acceptance criteria: (a) no crash — PASS (no pageerror, no red screen), (c) backend session invalidated — PASS (token cleared from localStorage, GET /api/auth/me returns 401), but (b) phone-login-btn visible within ~2s — FAIL. After tapping logout-btn, URL changes to '/' as expected, but the (tabs) Tabs navigator REMAINS MOUNTED — the Swipe screen ((tabs)/index) is rendered with the bottom tab bar still visible. Polled for [data-testid=phone-login-btn] for 3.5s; never appeared. Captured testIDs after logout = ['swipe-card-u_0083758cba16','swipe-pass-btn','swipe-like-btn','profile-name','edit-profile-btn','logout-btn'] — i.e. BOTH the Swipe tab and Profile tab content are still mounted concurrently, confirming the Tabs group did not tear down. Flow tested: phone +919955555555 / OTP 123456 -> /role-select (role-student + role-continue-btn) -> /profile-setup (name/age/city/qual/exp/hours/expected-pay/bio + save-profile-btn) -> /(tabs) Swipe -> tap 'Profile' tab -> tap [data-testid=logout-btn]. RCA: same as iteration_3 — on expo-router-web, calling router.replace('/') from inside a child screen of a nested Tabs group (which itself is a child of the root Stack) updates window.location.pathname to '/' but does NOT unmount the Tabs navigator. Gate's separate router.replace('/') (which also fires because user becomes null) likewise updates only the URL. The restoration of router.replace('/') after await logout() in profile.tsx therefore changes NOTHING compared to relying on Gate alone — both produce the exact same outcome: URL='/' but Tabs still rendered. Deprecation warnings still present: 'shadow*' style props, props.pointerEvents.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "(tabs)/profile.tsx -> handleLogout", "issue": "Logout from Profile tab still leaves user visually inside the Tabs navigator. After `await logout(); router.replace('/');` URL becomes '/' but (tabs)/_layout (Tabs) does NOT unmount on expo-router-web; (tabs)/index (Swipe) keeps rendering with the bottom tab bar. phone-login-btn never appears. Reference: /app/frontend/app/(tabs)/profile.tsx:28-33. Token + backend session ARE cleared (the integration layer is fine). Restoring the local router.replace('/') did NOT fix the rendering issue — same outcome as iteration_3 with Gate-only navigation.", "testID": "logout-btn", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Logout from Profile tab", "issue": "Backend logout 200 + token clear + /auth/me 401 all work, but the React tree does not switch from (tabs) group back to the root auth index. User has no visible way to re-enter the app without a browser refresh.", "affected_testIDs": ["logout-btn", "phone-login-btn"]}
+    ],
+    "design_issues": [
+      {"screen": "global", "issues": ["RN-Web deprecation warnings: 'shadow*' style props (use boxShadow), props.pointerEvents (use style.pointerEvents)."]}
+    ],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Deprecated shadowColor/shadowOffset/shadowOpacity/shadowRadius on RN-Web. Migrate to boxShadow. Reference: warnings emitted on app load."},
+      {"component": "props.pointerEvents", "issue": "Deprecated `pointerEvents` as a prop on a RN-Web View — use style.pointerEvents. Reference: warning emitted during /profile-setup mount."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_4.json"],
+  "action_items": [
+    "HIGH: The restored router.replace('/') AFTER await logout() in (tabs)/profile.tsx does NOT solve the bug — same failure mode as the Gate-only variant. The Tabs navigator group does not unmount on expo-router-web when navigating out of (tabs) via replace. Possible fixes to try: (1) use router.replace('/(auth)') if you split auth into its own group; (2) on web, after logout do `if (Platform.OS === 'web') window.location.replace('/')` as a hard reset to force the Tabs group to unmount; (3) wrap the entire app screen tree under a key that depends on `user?.id` so setting user=null remounts everything; (4) use `router.dismissAll()` then `router.replace('/')`; (5) move the auth index screen out from the root `index.tsx` shared route into its own group so leaving (tabs) actually changes Stack siblings.",
+    "MED: Add a regression Playwright test for this flow once fixed.",
+    "LOW: Migrate `shadow*` props to `boxShadow` and `pointerEvents` prop to `style.pointerEvents`."
+  ],
+  "critical_code_review_comments": [
+    "(tabs)/profile.tsx:28-33 — handleLogout now correctly awaits logout() and then calls router.replace('/'). Code is well-written, but on expo-router-web this does not unmount the parent (tabs) Tabs navigator. The fix attempt is correct in intent but ineffective in practice; need a different approach (window.location.replace on web OR remount-on-user-change strategy).",
+    "_layout.tsx Gate:30-32 — fires router.replace('/') when user becomes null; same web-router limitation applies (URL changes, Tabs stays mounted).",
+    "Confirmed via post-logout testID inspection: ['swipe-card-...','swipe-pass-btn','swipe-like-btn','profile-name','edit-profile-btn','logout-btn'] — BOTH Swipe and Profile tab content remain mounted simultaneously, clearly proving the (tabs) navigator did not tear down."
+  ],
+  "updated_files": ["/app/test_reports/iteration_4.json"],
+  "success_rate": {
+    "backend": "not tested this iteration (frontend-only per request)",
+    "frontend": "Phone OTP login + role-select + profile-setup + tab navigation: PASS. Logout — no crash: PASS. Logout — backend session invalidation: PASS. Logout — UI returns to auth screen within 2s: FAIL (HIGH)."
+  },
+  "seed_data_creation": "Created user via phone +919955555555 / OTP 123456 (student, name 'Logout Tester', city Bengaluru, age 22). Profile is persisted server-side.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "EXPO_PUBLIC_BACKEND_URL=https://shift-link-1.preview.emergentagent.com. Reproduction (post-fix): phone +919955555555 already has full student profile, so after OTP 123456 you land DIRECTLY in /(tabs). Tap text='Profile' (no testID on Tabs.Screen; tabBarTestID missing — could be added). Tap [data-testid=logout-btn]. Expected: [data-testid=phone-login-btn] visible within 2s. Observed after iteration_4 fix attempt: URL='/' but Swipe screen still rendered with bottom tab bar, phone-login-btn absent. Recommend trying the hard-reset window.location.replace('/') on web platform as the simplest unblock.",
+  "rca_of_issue": "RCA: expo-router on web does NOT unmount a child Tabs navigator group when a descendant screen calls router.replace('/') to a route owned by the root Stack. Both Gate (root) and handleLogout (leaf) calls update window.location.pathname to '/' but the React render tree continues to show (tabs)/_layout with (tabs)/index. Evidence: after logout, document contains testIDs from BOTH 'swipe-...' (Swipe tab) AND 'profile-name/edit-profile-btn/logout-btn' (Profile tab) — they share the Tabs parent, which is still alive. MITIGATION (recommended): in (tabs)/profile.tsx handleLogout, after await logout(), do: `if (Platform.OS === 'web') { window.location.replace('/'); } else { router.replace('/'); }` — this forces a full page navigation on web, unmounting all React Native Web roots including the Tabs group; native platforms keep the expo-router behavior which already works."
+}

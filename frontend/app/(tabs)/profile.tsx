@@ -29,7 +29,7 @@ export default function ProfileTab() {
     try {
       await logout();
     } catch {}
-    // Gate will detect user===null and redirect to '/'
+    router.replace("/");
   };
 
   if (loading) {
