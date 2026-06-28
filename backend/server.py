@@ -12,6 +12,7 @@ from typing import List, Optional, Dict, Any
 import uuid
 import random
 import httpx
+import stripe
 from datetime import datetime, timezone, timedelta
 
 ROOT_DIR = Path(__file__).parent
@@ -23,6 +24,10 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+stripe.api_key = os.environ.get('STRIPE_API_KEY', '')
+HIRE_FEE_INR_PAISE = 4900  # ₹49.00
+
+CATEGORIES = ["Retail", "Food & Beverage", "Tutoring", "Delivery", "Cleaning", "Office", "Other"]
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -79,6 +84,7 @@ class ProfileSetupIn(BaseModel):
     required_qualification: Optional[str] = None
     required_experience: Optional[str] = None
     message: Optional[str] = ""
+    category: Optional[str] = None  # one of CATEGORIES
 
 class SwipeIn(BaseModel):
     target_user_id: str
@@ -93,6 +99,19 @@ class BioSuggestIn(BaseModel):
     skills: Optional[List[str]] = []
     help_needed: Optional[str] = ""
     qualification: Optional[str] = ""
+
+class VerificationIn(BaseModel):
+    doc_base64: str  # ID/college card/shop photo
+    doc_type: Optional[str] = "id"
+
+class ReviewIn(BaseModel):
+    match_id: str
+    rating: int  # 1-5
+    text: Optional[str] = ""
+
+class HireCheckoutIn(BaseModel):
+    match_id: str
+    origin_url: str  # e.g., https://app.preview.emergentagent.com
 
 # ---------------- Auth helpers ----------------
 async def get_current_user(authorization: Optional[str] = Header(None)):
@@ -219,6 +238,7 @@ async def profile_setup(payload: ProfileSetupIn, authorization: Optional[str] = 
         "required_qualification": payload.required_qualification,
         "required_experience": payload.required_experience,
         "message": payload.message or "",
+        "category": payload.category if payload.category in CATEGORIES else None,
         "updated_at": now_utc(),
         # Use a fallback Unsplash image if user did not upload
         "photo_url": None if payload.photo_base64 else (
@@ -242,7 +262,14 @@ async def profile_me(authorization: Optional[str] = Header(None)):
 
 # ---------------- Swipe deck ----------------
 @api_router.get("/swipe/deck")
-async def swipe_deck(authorization: Optional[str] = Header(None)):
+async def swipe_deck(
+    authorization: Optional[str] = Header(None),
+    city: Optional[str] = None,
+    min_pay: Optional[int] = None,
+    max_pay: Optional[int] = None,
+    gender: Optional[str] = None,  # "male" | "female" | "any"
+    category: Optional[str] = None,
+):
     user = await get_current_user(authorization)
     if not user.get("has_profile"):
         raise HTTPException(status_code=400, detail="Setup your profile first")
@@ -251,13 +278,39 @@ async def swipe_deck(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=400, detail="Profile missing")
 
     opposite_role = "shop_owner" if user["role"] == "student" else "student"
-    # Exclude profiles already swiped
     already = await db.swipes.find({"swiper_id": user["user_id"]}, {"_id": 0, "target_user_id": 1}).to_list(5000)
     excluded = {s["target_user_id"] for s in already}
     excluded.add(user["user_id"])
-    cursor = db.profiles.find({"role": opposite_role, "user_id": {"$nin": list(excluded)}}, {"_id": 0}).limit(50)
-    deck = await cursor.to_list(50)
-    return {"deck": deck}
+
+    q: Dict[str, Any] = {"role": opposite_role, "user_id": {"$nin": list(excluded)}}
+    if city:
+        q["city"] = {"$regex": f"^{city}$", "$options": "i"}
+    if gender and gender != "any":
+        q["gender"] = gender
+    if category and category in CATEGORIES:
+        q["category"] = category
+    # Pay filter: students show min_pay <= expected_pay; shop owners show pay_offered >= min_pay
+    pay_field = "pay_offered" if opposite_role == "shop_owner" else "expected_pay"
+    if min_pay is not None:
+        q[pay_field] = {**(q.get(pay_field) or {}), "$gte": min_pay}
+    if max_pay is not None:
+        q[pay_field] = {**(q.get(pay_field) or {}), "$lte": max_pay}
+
+    cursor = db.profiles.find(q, {"_id": 0}).limit(60)
+    deck = await cursor.to_list(60)
+    # Decorate with verified flag and avg rating from reviews
+    for p in deck:
+        uid = p["user_id"]
+        u = await db.users.find_one({"user_id": uid}, {"_id": 0, "verified": 1})
+        p["verified"] = bool(u and u.get("verified"))
+        agg = await db.reviews.aggregate([
+            {"$match": {"reviewed_user_id": uid}},
+            {"$group": {"_id": "$reviewed_user_id", "avg": {"$avg": "$rating"}, "count": {"$sum": 1}}},
+        ]).to_list(1)
+        if agg:
+            p["rating_avg"] = round(agg[0]["avg"], 1)
+            p["rating_count"] = agg[0]["count"]
+    return {"deck": deck, "categories": CATEGORIES}
 
 @api_router.post("/swipe")
 async def post_swipe(payload: SwipeIn, authorization: Optional[str] = Header(None)):
@@ -553,6 +606,155 @@ async def seed_data():
             "updated_at": now_utc(),
         })
     logger.info("Seeded %d students + %d shop owners", len(SEED_STUDENTS), len(SEED_SHOPS))
+
+# ---------------- Verification ----------------
+@api_router.post("/verification/submit")
+async def verification_submit(payload: VerificationIn, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    # MVP: auto-approve uploaded doc. In production, a moderator would review.
+    await db.verifications.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {
+            "user_id": user["user_id"],
+            "doc_base64": payload.doc_base64,
+            "doc_type": payload.doc_type or "id",
+            "status": "approved",
+            "submitted_at": now_utc(),
+        }},
+        upsert=True,
+    )
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"verified": True}})
+    return {"ok": True, "verified": True}
+
+@api_router.get("/verification/me")
+async def verification_me(authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    return {"verified": bool(user.get("verified"))}
+
+# ---------------- Reviews ----------------
+@api_router.post("/reviews")
+async def post_review(payload: ReviewIn, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    if payload.rating < 1 or payload.rating > 5:
+        raise HTTPException(status_code=400, detail="Rating must be 1-5")
+    m = await db.matches.find_one({"match_id": payload.match_id, "user_ids": user["user_id"]}, {"_id": 0})
+    if not m:
+        raise HTTPException(status_code=404, detail="Match not found")
+    other_id = [u for u in m["user_ids"] if u != user["user_id"]][0]
+    # Only allow after a paid hire
+    hire = await db.hire_intents.find_one({"match_id": payload.match_id, "status": "paid"}, {"_id": 0})
+    if not hire:
+        raise HTTPException(status_code=400, detail="Reviews unlock after the hire is confirmed.")
+    existing = await db.reviews.find_one({"match_id": payload.match_id, "reviewer_user_id": user["user_id"]}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="You already reviewed this match")
+    review = {
+        "review_id": make_id("rv"),
+        "match_id": payload.match_id,
+        "reviewer_user_id": user["user_id"],
+        "reviewed_user_id": other_id,
+        "rating": payload.rating,
+        "text": payload.text or "",
+        "created_at": now_utc(),
+    }
+    await db.reviews.insert_one(review.copy())
+    return {"ok": True, "review": await db.reviews.find_one({"review_id": review["review_id"]}, {"_id": 0})}
+
+@api_router.get("/reviews/{user_id}")
+async def get_reviews(user_id: str, authorization: Optional[str] = Header(None)):
+    await get_current_user(authorization)
+    reviews = await db.reviews.find({"reviewed_user_id": user_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    avg = 0.0
+    if reviews:
+        avg = round(sum(r["rating"] for r in reviews) / len(reviews), 1)
+    return {"reviews": reviews, "avg": avg, "count": len(reviews)}
+
+# ---------------- Hire / Stripe ----------------
+@api_router.post("/hire/checkout")
+async def hire_checkout(payload: HireCheckoutIn, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    if user.get("role") != "shop_owner":
+        raise HTTPException(status_code=403, detail="Only shop owners can confirm a hire")
+    m = await db.matches.find_one({"match_id": payload.match_id, "user_ids": user["user_id"]}, {"_id": 0})
+    if not m:
+        raise HTTPException(status_code=404, detail="Match not found")
+    other_id = [u for u in m["user_ids"] if u != user["user_id"]][0]
+
+    existing = await db.hire_intents.find_one({"match_id": payload.match_id}, {"_id": 0})
+    if existing and existing.get("status") == "paid":
+        return {"already_paid": True, "hire": existing}
+
+    intent_id = existing["hire_intent_id"] if existing else make_id("hi")
+    success_url = payload.origin_url.rstrip("/") + f"/chat/{payload.match_id}?hire=success&session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = payload.origin_url.rstrip("/") + f"/chat/{payload.match_id}?hire=cancel"
+    try:
+        from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
+        sc = StripeCheckout(api_key=os.environ.get("STRIPE_API_KEY", ""))
+        req = CheckoutSessionRequest(
+            amount=49.0,
+            currency="inr",
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={"hire_intent_id": intent_id, "match_id": payload.match_id},
+        )
+        session = await sc.create_checkout_session(req)
+    except Exception as e:
+        logger.exception("Stripe checkout error")
+        raise HTTPException(status_code=500, detail=f"Stripe error: {e}")
+
+    hire = {
+        "hire_intent_id": intent_id,
+        "match_id": payload.match_id,
+        "payer_user_id": user["user_id"],
+        "payee_user_id": other_id,
+        "amount_paise": HIRE_FEE_INR_PAISE,
+        "currency": "inr",
+        "status": "pending",
+        "stripe_session_id": session.session_id,
+        "stripe_url": session.url,
+        "created_at": now_utc(),
+    }
+    await db.hire_intents.update_one(
+        {"match_id": payload.match_id},
+        {"$set": hire},
+        upsert=True,
+    )
+    return {"checkout_url": session.url, "hire_intent_id": intent_id}
+
+@api_router.get("/hire/{match_id}")
+async def hire_status(match_id: str, authorization: Optional[str] = Header(None)):
+    user = await get_current_user(authorization)
+    m = await db.matches.find_one({"match_id": match_id, "user_ids": user["user_id"]}, {"_id": 0})
+    if not m:
+        raise HTTPException(status_code=404, detail="Match not found")
+    hire = await db.hire_intents.find_one({"match_id": match_id}, {"_id": 0})
+    if not hire:
+        return {"status": "none"}
+    if hire.get("status") != "paid" and hire.get("stripe_session_id"):
+        try:
+            from emergentintegrations.payments.stripe.checkout import StripeCheckout
+            sc = StripeCheckout(api_key=os.environ.get("STRIPE_API_KEY", ""))
+            status_resp = await sc.get_checkout_status(hire["stripe_session_id"])
+            if getattr(status_resp, "payment_status", None) == "paid":
+                await db.hire_intents.update_one(
+                    {"match_id": match_id},
+                    {"$set": {"status": "paid", "paid_at": now_utc()}},
+                )
+                hire["status"] = "paid"
+                # Insert a system message in the chat
+                msg = {
+                    "message_id": make_id("msg"),
+                    "match_id": match_id,
+                    "sender_id": "system",
+                    "text": "🎉 Hire confirmed by Shiftly. You can now leave reviews after the shift!",
+                    "created_at": now_utc(),
+                    "is_system": True,
+                }
+                await db.messages.insert_one(msg.copy())
+                await ws_broadcast(match_id, {"type": "message", "message": _serialize(await db.messages.find_one({"message_id": msg["message_id"]}, {"_id": 0}))})
+        except Exception as e:
+            logger.warning(f"Stripe status check failed: {e}")
+    return {"status": hire.get("status"), "hire": hire}
 
 # ---------------- Misc ----------------
 @api_router.get("/")
